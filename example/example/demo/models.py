@@ -5,8 +5,8 @@ from django.contrib.sites.models import Site
 
 from allauth.socialaccount.providers import registry
 from allauth.socialaccount.models import SocialApp
-from allauth.socialaccount.providers.oauth.provider import OAuthProvider
-from allauth.socialaccount.providers.oauth2.provider import OAuth2Provider
+from allauth.socialaccount.providers.oauth_provider.provider import OAuthProvider
+from allauth.socialaccount.providers.oauth2_provider.provider import OAuth2Provider
 
 def setup_dummy_social_apps(sender, **kwargs):
     """

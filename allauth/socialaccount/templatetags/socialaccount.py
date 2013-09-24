@@ -62,5 +62,5 @@ def get_social_accounts(user):
     accounts = {}
     for account in user.socialaccount_set.all().iterator():
         providers = accounts.setdefault(account.provider, [])
-        providers.append(account)
+        providers.append_provider(account)
     return accounts

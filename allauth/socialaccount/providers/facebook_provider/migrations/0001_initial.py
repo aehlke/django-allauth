@@ -1,27 +1,40 @@
 # encoding: utf-8
 from south.db import db
 from south.v2 import SchemaMigration
-from django.conf import settings
 
 class Migration(SchemaMigration):
-    depends_on = []
-    if 'allauth.socialaccount.providers.facebook_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('facebook_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.twitter_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('twitter_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.openid_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('openid_provider', '0002_tosocialaccount'),)
+    depends_on = (('socialaccount', '0001_initial'),)
 
     def forwards(self, orm):
+        
+        # Adding model 'FacebookApp'
+        db.create_table('facebook_provider_facebookapp', (
+            ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
+            ('site', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['sites.Site'])),
+            ('name', self.gf('django.db.models.fields.CharField')(max_length=40)),
+            ('application_id', self.gf('django.db.models.fields.CharField')(max_length=80)),
+            ('api_key', self.gf('django.db.models.fields.CharField')(max_length=80)),
+            ('application_secret', self.gf('django.db.models.fields.CharField')(max_length=80)),
+        ))
+        db.send_create_signal('facebook_provider', ['FacebookApp'])
 
-        # Adding unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.create_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        # Adding model 'FacebookAccount'
+        db.create_table('facebook_provider_facebookaccount', (
+            ('socialaccount_ptr', self.gf('django.db.models.fields.related.OneToOneField')(to=orm['socialaccount.SocialAccount'], unique=True, primary_key=True)),
+            ('social_id', self.gf('django.db.models.fields.CharField')(unique=True, max_length=255)),
+            ('name', self.gf('django.db.models.fields.CharField')(max_length=255)),
+            ('link', self.gf('django.db.models.fields.URLField')(max_length=200)),
+        ))
+        db.send_create_signal('facebook_provider', ['FacebookAccount'])
 
 
     def backwards(self, orm):
+        
+        # Deleting model 'FacebookApp'
+        db.delete_table('facebook_provider_facebookapp')
 
-        # Removing unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.delete_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        # Deleting model 'FacebookAccount'
+        db.delete_table('facebook_provider_facebookaccount')
 
 
     models = {
@@ -61,6 +74,22 @@ class Migration(SchemaMigration):
             'model': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
         },
+        'facebook_provider.facebookaccount': {
+            'Meta': {'object_name': 'FacebookAccount', '_ormbases': ['socialaccount.SocialAccount']},
+            'link': ('django.db.models.fields.URLField', [], {'max_length': '200'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'social_id': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '255'}),
+            'socialaccount_ptr': ('django.db.models.fields.related.OneToOneField', [], {'to': "orm['socialaccount.SocialAccount']", 'unique': 'True', 'primary_key': 'True'})
+        },
+        'facebook_provider.facebookapp': {
+            'Meta': {'object_name': 'FacebookApp'},
+            'api_key': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'application_id': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'application_secret': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '40'}),
+            'site': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['sites.Site']"})
+        },
         'sites.site': {
             'Meta': {'ordering': "('domain',)", 'object_name': 'Site', 'db_table': "'django_site'"},
             'domain': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
@@ -68,32 +97,12 @@ class Migration(SchemaMigration):
             'name': ('django.db.models.fields.CharField', [], {'max_length': '50'})
         },
         'socialaccount.socialaccount': {
-            'Meta': {'unique_together': "(('provider', 'uid'),)", 'object_name': 'SocialAccount'},
-            'date_joined': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
-            'extra_data': ('allauth.socialaccount.fields.JSONField', [], {'default': "'{}'"}),
+            'Meta': {'object_name': 'SocialAccount'},
+            'date_joined': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'last_login': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'}),
-            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30'}),
-            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'last_login': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"})
-        },
-        'socialaccount.socialapp': {
-            'Meta': {'object_name': 'SocialApp'},
-            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'key': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '40'}),
-            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30'}),
-            'secret': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
-            'site': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['sites.Site']"})
-        },
-        'socialaccount.socialtoken': {
-            'Meta': {'unique_together': "(('app', 'account'),)", 'object_name': 'SocialToken'},
-            'account': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['socialaccount.SocialAccount']"}),
-            'app': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['socialaccount.SocialApp']"}),
-            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'token': ('django.db.models.fields.CharField', [], {'max_length': '200'}),
-            'token_secret': ('django.db.models.fields.CharField', [], {'max_length': '200', 'blank': 'True'})
         }
     }
 
-    complete_apps = ['socialaccount']
+    complete_apps = ['facebook_provider']

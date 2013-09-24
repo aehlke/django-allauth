@@ -1,27 +1,35 @@
 # encoding: utf-8
-from south.db import db
-from south.v2 import SchemaMigration
-from django.conf import settings
+from south.v2 import DataMigration
 
-class Migration(SchemaMigration):
-    depends_on = []
-    if 'allauth.socialaccount.providers.facebook_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('facebook_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.twitter_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('twitter_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.openid_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('openid_provider', '0002_tosocialaccount'),)
+class Migration(DataMigration):
+
+    depends_on = (('socialaccount', '0002_genericmodels'),)
 
     def forwards(self, orm):
-
-        # Adding unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.create_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        # Migrate apps
+        app_id_to_sapp = {}
+        for app in orm.TwitterApp.objects.all():
+            sapp = orm['socialaccount.SocialApp'].objects \
+                .create(site=app.site,
+                        provider='twitter_provider',
+                        name=app.name,
+                        key=app.consumer_key,
+                        secret=app.consumer_secret)
+            app_id_to_sapp[app.id] = sapp
+        # Migrate accounts
+        acc_id_to_sacc = {}
+        for acc in orm.TwitterAccount.objects.all():
+            sacc = acc.socialaccount_ptr
+            sacc.uid = str(acc.social_id)
+            sacc.extra_data = { 'screen_name': acc.username,
+                                'profile_image_url': acc.profile_image_url }
+            sacc.provider = 'twitter_provider'
+            sacc.save()
+            acc_id_to_sacc[acc.id] = sacc
 
 
     def backwards(self, orm):
-
-        # Removing unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.delete_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        "Write your backwards methods here."
 
 
     models = {
@@ -68,13 +76,13 @@ class Migration(SchemaMigration):
             'name': ('django.db.models.fields.CharField', [], {'max_length': '50'})
         },
         'socialaccount.socialaccount': {
-            'Meta': {'unique_together': "(('provider', 'uid'),)", 'object_name': 'SocialAccount'},
+            'Meta': {'object_name': 'SocialAccount'},
             'date_joined': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'extra_data': ('allauth.socialaccount.fields.JSONField', [], {'default': "'{}'"}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'last_login': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'}),
-            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30'}),
-            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
+            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255', 'blank': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"})
         },
         'socialaccount.socialapp': {
@@ -93,7 +101,25 @@ class Migration(SchemaMigration):
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'token': ('django.db.models.fields.CharField', [], {'max_length': '200'}),
             'token_secret': ('django.db.models.fields.CharField', [], {'max_length': '200', 'blank': 'True'})
+        },
+        'twitter_provider.twitteraccount': {
+            'Meta': {'object_name': 'TwitterAccount', '_ormbases': ['socialaccount.SocialAccount']},
+            'profile_image_url': ('django.db.models.fields.URLField', [], {'max_length': '200'}),
+            'social_id': ('django.db.models.fields.BigIntegerField', [], {'unique': 'True'}),
+            'socialaccount_ptr': ('django.db.models.fields.related.OneToOneField', [], {'to': "orm['socialaccount.SocialAccount']", 'unique': 'True', 'primary_key': 'True'}),
+            'username': ('django.db.models.fields.CharField', [], {'max_length': '15'})
+        },
+        'twitter_provider.twitterapp': {
+            'Meta': {'object_name': 'TwitterApp'},
+            'access_token_url': ('django.db.models.fields.URLField', [], {'max_length': '200'}),
+            'authorize_url': ('django.db.models.fields.URLField', [], {'max_length': '200'}),
+            'consumer_key': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'consumer_secret': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '40'}),
+            'request_token_url': ('django.db.models.fields.URLField', [], {'max_length': '200'}),
+            'site': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['sites.Site']"})
         }
     }
 
-    complete_apps = ['socialaccount']
+    complete_apps = ['socialaccount', 'twitter_provider']

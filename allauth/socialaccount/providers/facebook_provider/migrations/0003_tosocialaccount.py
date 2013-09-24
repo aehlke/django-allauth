@@ -1,27 +1,44 @@
 # encoding: utf-8
-from south.db import db
-from south.v2 import SchemaMigration
-from django.conf import settings
+from south.v2 import DataMigration
 
-class Migration(SchemaMigration):
-    depends_on = []
-    if 'allauth.socialaccount.providers.facebook_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('facebook_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.twitter_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('twitter_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.openid_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('openid_provider', '0002_tosocialaccount'),)
+class Migration(DataMigration):
+
+    depends_on = (('socialaccount', '0002_genericmodels'),)
 
     def forwards(self, orm):
-
-        # Adding unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.create_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        # Migrate FB apps
+        app_id_to_sapp = {}
+        for app in orm.FacebookApp.objects.all():
+            sapp = orm['socialaccount.SocialApp'].objects \
+                .create(site=app.site,
+                        provider='facebook_provider',
+                        name=app.name,
+                        key=app.application_id,
+                        secret=app.application_secret)
+            app_id_to_sapp[app.id] = sapp
+        # Migrate FB accounts
+        acc_id_to_sacc = {}
+        for acc in orm.FacebookAccount.objects.all():
+            sacc = acc.socialaccount_ptr
+            sacc.uid = acc.social_id
+            sacc.extra_data = { 'link': acc.link,
+                                'name': acc.name }
+            sacc.provider = 'facebook_provider'
+            sacc.save()
+            acc_id_to_sacc[acc.id] = sacc
+        # Migrate tokens
+        for token in orm.FacebookAccessToken.objects.all():
+            sapp = app_id_to_sapp[token.app.id]
+            sacc = acc_id_to_sacc[token.account.id]
+            orm['socialaccount.SocialToken'].objects \
+                .create(app=sapp,
+                        account=sacc,
+                        token=token.access_token,
+                        token_secret='')
 
 
     def backwards(self, orm):
-
-        # Removing unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.delete_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        "Write your backwards methods here."
 
 
     models = {
@@ -61,6 +78,29 @@ class Migration(SchemaMigration):
             'model': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
         },
+        'facebook_provider.facebookaccesstoken': {
+            'Meta': {'unique_together': "(('app', 'account'),)", 'object_name': 'FacebookAccessToken'},
+            'access_token': ('django.db.models.fields.CharField', [], {'max_length': '200'}),
+            'account': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['facebook_provider.FacebookAccount']"}),
+            'app': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['facebook_provider.FacebookApp']"}),
+            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'})
+        },
+        'facebook_provider.facebookaccount': {
+            'Meta': {'object_name': 'FacebookAccount', '_ormbases': ['socialaccount.SocialAccount']},
+            'link': ('django.db.models.fields.URLField', [], {'max_length': '200'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'social_id': ('django.db.models.fields.CharField', [], {'unique': 'True', 'max_length': '255'}),
+            'socialaccount_ptr': ('django.db.models.fields.related.OneToOneField', [], {'to': "orm['socialaccount.SocialAccount']", 'unique': 'True', 'primary_key': 'True'})
+        },
+        'facebook_provider.facebookapp': {
+            'Meta': {'object_name': 'FacebookApp'},
+            'api_key': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'application_id': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'application_secret': ('django.db.models.fields.CharField', [], {'max_length': '80'}),
+            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '40'}),
+            'site': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['sites.Site']"})
+        },
         'sites.site': {
             'Meta': {'ordering': "('domain',)", 'object_name': 'Site', 'db_table': "'django_site'"},
             'domain': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
@@ -68,13 +108,13 @@ class Migration(SchemaMigration):
             'name': ('django.db.models.fields.CharField', [], {'max_length': '50'})
         },
         'socialaccount.socialaccount': {
-            'Meta': {'unique_together': "(('provider', 'uid'),)", 'object_name': 'SocialAccount'},
+            'Meta': {'object_name': 'SocialAccount'},
             'date_joined': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'extra_data': ('allauth.socialaccount.fields.JSONField', [], {'default': "'{}'"}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'last_login': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'}),
-            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30'}),
-            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
+            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255', 'blank': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"})
         },
         'socialaccount.socialapp': {
@@ -96,4 +136,4 @@ class Migration(SchemaMigration):
         }
     }
 
-    complete_apps = ['socialaccount']
+    complete_apps = ['socialaccount', 'facebook_provider']

@@ -1,27 +1,20 @@
 # encoding: utf-8
-from south.db import db
-from south.v2 import SchemaMigration
-from django.conf import settings
+from south.v2 import DataMigration
 
-class Migration(SchemaMigration):
-    depends_on = []
-    if 'allauth.socialaccount.providers.facebook_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('facebook_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.twitter_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('twitter_provider', '0003_tosocialaccount'),)
-    if 'allauth.socialaccount.providers.openid_provider' in settings.INSTALLED_APPS:
-        depends_on.append(('openid_provider', '0002_tosocialaccount'),)
+class Migration(DataMigration):
+
+    depends_on = (('socialaccount', '0002_genericmodels'),)
 
     def forwards(self, orm):
-
-        # Adding unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.create_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        for acc in orm.OpenIDAccount.objects.all():
+            sacc = acc.socialaccount_ptr
+            sacc.uid = acc.identity
+            sacc.provider = 'openid_provider'
+            sacc.save()
 
 
     def backwards(self, orm):
-
-        # Removing unique constraint on 'SocialAccount', fields ['uid', 'provider']
-        db.delete_unique('socialaccount_socialaccount', ['uid', 'provider'])
+        "Write your backwards methods here."
 
 
     models = {
@@ -61,6 +54,29 @@ class Migration(SchemaMigration):
             'model': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '100'})
         },
+        'openid_provider.openidaccount': {
+            'Meta': {'object_name': 'OpenIDAccount', '_ormbases': ['socialaccount.SocialAccount']},
+            'identity': ('django.db.models.fields.URLField', [], {'unique': 'True', 'max_length': '255'}),
+            'socialaccount_ptr': ('django.db.models.fields.related.OneToOneField', [], {'to': "orm['socialaccount.SocialAccount']", 'unique': 'True', 'primary_key': 'True'})
+        },
+        'openid_provider.openidnonce': {
+            'Meta': {'object_name': 'OpenIDNonce'},
+            'date_created': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
+            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'salt': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'server_url': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'timestamp': ('django.db.models.fields.IntegerField', [], {})
+        },
+        'openid_provider.openidstore': {
+            'Meta': {'object_name': 'OpenIDStore'},
+            'assoc_type': ('django.db.models.fields.TextField', [], {}),
+            'handle': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'issued': ('django.db.models.fields.IntegerField', [], {}),
+            'lifetime': ('django.db.models.fields.IntegerField', [], {}),
+            'secret': ('django.db.models.fields.TextField', [], {}),
+            'server_url': ('django.db.models.fields.CharField', [], {'max_length': '255'})
+        },
         'sites.site': {
             'Meta': {'ordering': "('domain',)", 'object_name': 'Site', 'db_table': "'django_site'"},
             'domain': ('django.db.models.fields.CharField', [], {'max_length': '100'}),
@@ -68,13 +84,13 @@ class Migration(SchemaMigration):
             'name': ('django.db.models.fields.CharField', [], {'max_length': '50'})
         },
         'socialaccount.socialaccount': {
-            'Meta': {'unique_together': "(('provider', 'uid'),)", 'object_name': 'SocialAccount'},
+            'Meta': {'object_name': 'SocialAccount'},
             'date_joined': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'extra_data': ('allauth.socialaccount.fields.JSONField', [], {'default': "'{}'"}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'last_login': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'}),
-            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30'}),
-            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255'}),
+            'provider': ('django.db.models.fields.CharField', [], {'max_length': '30', 'blank': 'True'}),
+            'uid': ('django.db.models.fields.CharField', [], {'max_length': '255', 'blank': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"})
         },
         'socialaccount.socialapp': {
@@ -96,4 +112,4 @@ class Migration(SchemaMigration):
         }
     }
 
-    complete_apps = ['socialaccount']
+    complete_apps = ['socialaccount', 'openid_provider']
